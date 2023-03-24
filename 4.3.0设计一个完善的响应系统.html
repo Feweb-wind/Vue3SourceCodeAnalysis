@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div class="myContainer"></div>
+    <button>click to change div</button>
+
+    <script>
+        //修改桶的数据结构 为weakmap  //如果有对weakmap还不熟悉的小伙伴自己下去了解
+        const bucket = new WeakMap()
+
+        const data = { text: 'hello world' }
+        const obj = new Proxy(data, {
+            //对get和set进行修改
+            get(target, key) {
+                //如果没有activeEffect 直接return
+                if (!activeEffect) return target[key]
+                // 根据target从桶中取得depsMap，它是一个map类型：key----> effects
+                let depsMap = bucket.get(target)
+                //如果不存在depsMap,那么新建一个map与target关联
+                if (!depsMap) {
+                    bucket.set(target, (depsMap = new Map()))
+                }
+                //再根据key 从depsMap中取得deps，它是一个set类型
+                //里面存储着所有与当前key相关联的副作用函数，effects
+                let deps = depsMap.get(key)
+                // 如果key不存在，同样新建立一个set并与key关联
+                if (!deps) {
+                    depsMap.set(key, (deps = new Set()))
+                }
+                //最后将当前激活的副作用函数添加到桶里
+                deps.add(activeEffect)
+                //返回属性值
+                return target[key]
+            },
+            set(target, key, newVal) {
+                //设置属性值
+                target[key] = newVal
+                //根据target从桶中取得depsMap，它是key---->effects
+                const depsMap = bucket.get(target)
+                if (!depsMap) return
+                //根据key取得的所有副作用函数effects
+                const effects = depsMap.get(key)
+                //执行副作用函数
+                effects && effects.forEach(fn => fn())
+            }
+        })
+        //用全局变量存储被注册的副作用函数
+        let activeEffect
+        //effect用来注册副作用函数
+        function effect(fn) {
+            //调用时将fn赋值给activeEffect
+            activeEffect = fn
+            //执行副作用函数
+            fn()
+        }
+        effect(
+            //匿名的副作用函数
+            () => {
+                console.log('effect run')
+                document.querySelector('.myContainer').innerHTML = obj.text
+            }
+        )
+
+    </script>
+    <script>
+        document.querySelector('button').onclick = function () {
+            obj.text += 'h'
+        }
+    </script>
+</body>
+
+</html>
